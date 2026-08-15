@@ -1,0 +1,39 @@
+import {
+  hasValidCronAuthorization,
+  isCronWorkerConfigured,
+} from "@/lib/jobs/cron-auth";
+import { logWorkerFailure } from "@/lib/jobs/worker-error";
+import { runQueuedNotificationDeliveries } from "@/lib/notifications/runner";
+
+export const runtime = "nodejs";
+
+async function execute(request: Request) {
+  if (!isCronWorkerConfigured()) {
+    return Response.json(
+      { error: "Notification delivery worker is not configured." },
+      { status: 503 },
+    );
+  }
+  if (!hasValidCronAuthorization(request)) {
+    return Response.json({ error: "Unauthorized." }, { status: 401 });
+  }
+
+  try {
+    const summary = await runQueuedNotificationDeliveries();
+    return Response.json({ status: "completed", summary });
+  } catch (error) {
+    logWorkerFailure("notification", error);
+    return Response.json(
+      { error: "Notification delivery worker failed. Inspect secure server logs." },
+      { status: 500 },
+    );
+  }
+}
+
+export async function GET(request: Request) {
+  return execute(request);
+}
+
+export async function POST(request: Request) {
+  return execute(request);
+}
